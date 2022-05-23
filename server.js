@@ -4,9 +4,11 @@ const path = require("path");
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(__dirname + '/public'));
-app.use('/js', express.static(__dirname + '/node_modules/bootstrap/dist/js')); // redirect bootstrap JS
-app.use('/js', express.static(__dirname + '/node_modules/jquery/dist')); // redirect JS jQuery
-app.use('/css', express.static(__dirname + '/node_modules/bootstrap/dist/css')); // redirect CSS bootstrap
+app.use('/css', express.static(path.join(__dirname, 'node_modules/bootstrap/dist/css')));
+app.use('/css', express.static(path.join(__dirname, 'node_modules/bootstrap-icons/font/')));
+app.use('/js', express.static(path.join(__dirname, 'node_modules/@popperjs/core/dist/umd')));
+app.use('/js', express.static(path.join(__dirname, 'node_modules/bootstrap/dist/js')));
+app.use('/js', express.static(path.join(__dirname, 'node_modules/jquery/dist')));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname) + "/public/index.html")
@@ -26,14 +28,19 @@ http.listen(PORT, _ => {
 
 var serverID = 'undefined';
 var currentPoint = 0;
-io.on('connection', function (socket){
+io.on('connection', function (socket)
+{
     console.log('a user connected: ' + socket.id + " (server: " + serverID + " )");
-    socket.broadcast.emit('OnActivePoint', currentPoint);
+    socket.emit('OnActivePoint', currentPoint);
+    socket.emit('OnServerChangeConnection',
+                          (serverID != 'undefined') ?
+                          "online" : "offline");
 
     //register the server id, received the command from unity
     socket.on('RegServerId', function (data){
-        serverID = socket.id;
-        console.log('reg server id : ' + serverID);
+      serverID = socket.id;
+      console.log('reg server id : ' + serverID);
+      io.emit('OnServerChangeConnection', "online");
     });
 
     socket.on('disconnect', function(){
@@ -41,6 +48,7 @@ io.on('connection', function (socket){
         {
            serverID = 'undefined';
            console.log('removed Server: ' + socket.id);
+           io.emit('OnServerChangeConnection', "offline");
         }
         else
         {
@@ -67,6 +75,11 @@ io.on('connection', function (socket){
         }
     });
 
+    socket.on('OnToggleStreamEvent', function (data){
+      console.log(data);
+      socket.broadcast.emit('OnToggleStreamEvent', data);
+    });
+
     socket.on('OnRequestIDPoint', function (data){
         console.log("Request");
         if (currentPoint == 0) {
@@ -77,6 +90,7 @@ io.on('connection', function (socket){
 
     socket.on('OnPointsEvent', function (data){
         var pars = parseInt(data, 10);
+        console.log('Active point' + pars);
         if (isNaN(pars)) return;
         currentPoint = pars;
         socket.broadcast.emit('OnActivePoint', currentPoint);
